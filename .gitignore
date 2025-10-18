@@ -36,3 +36,6 @@ build-info
 
 # Keep deployment info
 !artifacts/deployments/
+
+# virtual env
+/venv
