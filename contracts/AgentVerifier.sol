@@ -27,8 +27,8 @@ contract AgentVerifier {
 
     /**
      * @dev Records an action for the calling agent
-     * @param _hash The hash of the action data
-     * @param _cid The content identifier (e.g., IPFS CID)
+     * @param _hash The hash of the action data (SHA-256 of input + output + timestamp)
+     * @param _cid The IPFS content identifier for full record
      * @param _ts The timestamp of the action
      */
     function recordAction(
