@@ -1,96 +1,83 @@
-// SPDX-License-Identifier: MIT
+// contracts/AgentVerifier.sol
+// SPDX-License-Identifier: ISC
 pragma solidity ^0.8.20;
 
-/**
- * @title AgentVerifier
- * @dev A simple blockchain logging system that records agent actions
- */
 contract AgentVerifier {
-    // Structure to store action data for each agent
     struct ActionData {
-        bytes32 hash;      // Hash of the action data
-        string cid;        // Content identifier (e.g., IPFS CID)
-        uint256 ts;        // Timestamp of the action
+        bytes32 hash;   // canonical hash of (inputs, outputs, ts)
+        string cid;     // off-chain JSON with model/data provenance
+        uint256 ts;     // unix seconds
     }
 
-    // Mapping from agent address to their actions
-    mapping(address => ActionData[]) public agentActions;
+    // agent => list of actions (append-only)
+    mapping(address => ActionData[]) private actions;
 
-    // Event emitted when an action is recorded
-    event ActionRecorded(
-        address indexed agent,
-        bytes32 hash,
-        string cid,
-        uint256 ts,
-        uint256 indexed actionIndex
-    );
+    // --- NEW: points / token ledger ---
+    mapping(address => int256) private points;
 
-    /**
-     * @dev Records an action for the calling agent
-     * @param _hash The hash of the action data (SHA-256 of input + output + timestamp)
-     * @param _cid The IPFS content identifier for full record
-     * @param _ts The timestamp of the action
-     */
-    function recordAction(
-        bytes32 _hash,
-        string memory _cid,
-        uint256 _ts
-    ) external {
-        // Create new action data
-        ActionData memory newAction = ActionData({
-            hash: _hash,
-            cid: _cid,
-            ts: _ts
-        });
+    // --- NEW: agent registry for discovery in UI ---
+    address[] private agents;
+    mapping(address => bool) private isKnownAgent;
 
-        // Store the action for the caller
-        agentActions[msg.sender].push(newAction);
+    // ownership (simple)
+    address public owner;
+    modifier onlyOwner() { require(msg.sender == owner, "not owner"); _; }
 
-        // Get the index of the newly added action
-        uint256 actionIndex = agentActions[msg.sender].length - 1;
+    // events
+    event ActionRecorded(address indexed agent, bytes32 hash, string cid, uint256 ts, uint256 indexed actionIndex);
+    event ActionEvaluated(address indexed agent, uint256 indexed actionIndex, bool good, uint256 delta, int256 newPoints, string reason);
 
-        // Emit event with action details
-        emit ActionRecorded(msg.sender, _hash, _cid, _ts, actionIndex);
+    constructor() {
+        owner = msg.sender;
     }
 
-    /**
-     * @dev Retrieves the number of actions for a specific agent
-     * @param _agent The address of the agent
-     * @return The number of actions recorded for the agent
-     */
-    function getActionCount(address _agent) external view returns (uint256) {
-        return agentActions[_agent].length;
+    // --- existing self-record method (for wallets/agents that call directly) ---
+    function recordAction(bytes32 _hash, string memory _cid, uint256 _ts) external {
+        _record(msg.sender, _hash, _cid, _ts);
     }
 
-    /**
-     * @dev Retrieves a specific action for an agent
-     * @param _agent The address of the agent
-     * @param _index The index of the action
-     * @return hash The hash of the action
-     * @return cid The content identifier
-     * @return ts The timestamp
-     */
-    function getAction(address _agent, uint256 _index)
-        external
-        view
-        returns (
-            bytes32 hash,
-            string memory cid,
-            uint256 ts
-        )
-    {
-        require(_index < agentActions[_agent].length, "Action index out of bounds");
-        ActionData memory action = agentActions[_agent][_index];
-        return (action.hash, action.cid, action.ts);
+    // --- NEW: server/evaluator can record on behalf of an agent (demo-friendly) ---
+    function recordActionFor(address agent, bytes32 _hash, string memory _cid, uint256 _ts) external onlyOwner {
+        _record(agent, _hash, _cid, _ts);
     }
 
-    /**
-     * @dev Retrieves all actions for a specific agent
-     * @param _agent The address of the agent
-     * @return An array of all actions for the agent
-     */
-    function getAllActions(address _agent) external view returns (ActionData[] memory) {
-        return agentActions[_agent];
+    function _record(address agent, bytes32 _hash, string memory _cid, uint256 _ts) internal {
+        if (!isKnownAgent[agent]) {
+            isKnownAgent[agent] = true;
+            agents.push(agent);
+        }
+        actions[agent].push(ActionData({hash: _hash, cid: _cid, ts: _ts}));
+        emit ActionRecorded(agent, _hash, _cid, _ts, actions[agent].length - 1);
+    }
+
+    // --- NEW: evaluate an action and adjust points ---
+    function evaluateAction(address agent, uint256 index, bool good, uint256 delta, string calldata reason) external onlyOwner {
+        require(index < actions[agent].length, "bad index");
+        int256 newBal = points[agent] + (good ? int256(delta) : -int256(delta));
+        points[agent] = newBal;
+        emit ActionEvaluated(agent, index, good, delta, newBal, reason);
+    }
+
+    // views
+    function getActionCount(address agent) external view returns (uint256) {
+        return actions[agent].length;
+    }
+
+    function getAction(address agent, uint256 index) external view returns (bytes32, string memory, uint256) {
+        ActionData storage a = actions[agent][index];
+        return (a.hash, a.cid, a.ts);
+    }
+
+    function getAllActions(address agent) external view returns (ActionData[] memory) {
+        return actions[agent];
+    }
+
+    // --- NEW: points + discovery ---
+    function getPoints(address agent) external view returns (int256) {
+        return points[agent];
+    }
+
+    function listAgents() external view returns (address[] memory) {
+        return agents;
     }
 }
-

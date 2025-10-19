@@ -3,473 +3,346 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AgentVerifier Dashboard</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-        
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            overflow: hidden;
-        }
-        
-        .header {
-            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
-            color: white;
-            padding: 30px;
-            text-align: center;
-        }
-        
-        .header h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
-        }
-        
-        .header p {
-            opacity: 0.8;
-            font-size: 1.1em;
-        }
-        
-        .content {
-            padding: 30px;
-        }
-        
-        .log-section {
-            background: #f8f9fa;
-            border-radius: 10px;
-            padding: 25px;
-            margin-bottom: 30px;
-        }
-        
-        .log-section h2 {
-            color: #2c3e50;
-            margin-bottom: 20px;
-            font-size: 1.5em;
-        }
-        
-        .form-group {
-            margin-bottom: 20px;
-        }
-        
-        label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: #34495e;
-        }
-        
-        input, textarea, select {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e1e8ed;
-            border-radius: 8px;
-            font-size: 14px;
-            transition: border-color 0.3s;
-        }
-        
-        input:focus, textarea:focus, select:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-        
-        textarea {
-            height: 100px;
-            resize: vertical;
-        }
-        
-        .btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 12px 30px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: 600;
-            transition: transform 0.2s;
-        }
-        
-        .btn:hover {
-            transform: translateY(-2px);
-        }
-        
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
-        
-        .actions-section {
-            background: #f8f9fa;
-            border-radius: 10px;
-            padding: 25px;
-        }
-        
-        .actions-section h2 {
-            color: #2c3e50;
-            margin-bottom: 20px;
-            font-size: 1.5em;
-        }
-        
-        .action-item {
-            background: white;
-            border: 1px solid #e1e8ed;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 15px;
-            transition: box-shadow 0.3s;
-        }
-        
-        .action-item:hover {
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        }
-        
-        .action-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-        
-        .action-hash {
-            font-family: monospace;
-            background: #e8f4fd;
-            padding: 5px 10px;
-            border-radius: 5px;
-            font-size: 12px;
-            color: #2c3e50;
-        }
-        
-        .action-timestamp {
-            color: #7f8c8d;
-            font-size: 14px;
-        }
-        
-        .action-details {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin-top: 15px;
-        }
-        
-        .detail-item {
-            background: #f8f9fa;
-            padding: 10px;
-            border-radius: 5px;
-        }
-        
-        .detail-label {
-            font-weight: 600;
-            color: #34495e;
-            font-size: 12px;
-            margin-bottom: 5px;
-        }
-        
-        .detail-value {
-            font-family: monospace;
-            font-size: 12px;
-            color: #2c3e50;
-            word-break: break-all;
-        }
-        
-        .view-btn {
-            background: #27ae60;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 12px;
-            margin-top: 10px;
-        }
-        
-        .view-btn:hover {
-            background: #229954;
-        }
-        
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.5);
-        }
-        
-        .modal-content {
-            background-color: white;
-            margin: 5% auto;
-            padding: 30px;
-            border-radius: 15px;
-            width: 80%;
-            max-width: 800px;
-            max-height: 80vh;
-            overflow-y: auto;
-        }
-        
-        .close {
-            color: #aaa;
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-        
-        .close:hover {
-            color: black;
-        }
-        
-        .json-display {
-            background: #2c3e50;
-            color: #ecf0f1;
-            padding: 20px;
-            border-radius: 8px;
-            font-family: monospace;
-            font-size: 14px;
-            white-space: pre-wrap;
-            max-height: 400px;
-            overflow-y: auto;
-        }
-        
-        .status {
-            padding: 10px;
-            border-radius: 5px;
-            margin-bottom: 20px;
-            font-weight: 600;
-        }
-        
-        .status.success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-        
-        .status.error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-        
-        .loading {
-            text-align: center;
-            padding: 20px;
-            color: #7f8c8d;
-        }
-    </style>
+    <title>Agent Accountability Platform</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>🔗 AgentVerifier Dashboard</h1>
-            <p>On-Chain Action Provenance System</p>
-        </div>
-        
-        <div class="content">
-            <!-- Log Action Section -->
-            <div class="log-section">
-                <h2>📝 Log New Action</h2>
-                <form id="logActionForm">
-                    <div class="form-group">
-                        <label for="agentId">Agent ID:</label>
-                        <input type="text" id="agentId" value="agent_001" required>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <i class="fas fa-shield-alt"></i>
+                    <h1>Agent Accountability</h1>
+                </div>
+                <div class="header-stats">
+                    <div class="stat">
+                        <span class="stat-label">Total Agents</span>
+                        <span class="stat-value" id="totalAgents">0</span>
                     </div>
-                    
-                    <div class="form-group">
-                        <label for="inputData">Input Data (JSON):</label>
-                        <textarea id="inputData" placeholder='{"prompt": "Hello world", "model": "gpt-4"}' required>{"prompt": "Hello world", "model": "gpt-4"}</textarea>
+                    <div class="stat">
+                        <span class="stat-label">Active Actions</span>
+                        <span class="stat-value" id="activeActions">0</span>
                     </div>
-                    
-                    <div class="form-group">
-                        <label for="outputData">Output Data (JSON):</label>
-                        <textarea id="outputData" placeholder='{"response": "Hello! How can I help you?"}' required>{"response": "Hello! How can I help you?", "confidence": 0.95}</textarea>
+                    <div class="stat">
+                        <span class="stat-label">System Health</span>
+                        <span class="stat-value health" id="systemHealth">Checking...</span>
                     </div>
-                    
-                    <button type="submit" class="btn" id="logBtn">🚀 Log Action</button>
-                </form>
-                
-                <div id="logStatus"></div>
-            </div>
-            
-            <!-- Actions List Section -->
-            <div class="actions-section">
-                <h2>📋 Action History</h2>
-                <button class="btn" onclick="loadActions()" style="margin-bottom: 20px;">🔄 Refresh Actions</button>
-                <div id="actionsList">
-                    <div class="loading">Loading actions...</div>
                 </div>
             </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Sidebar -->
+    <aside class="sidebar">
+                <div class="sidebar-header">
+                    <h3>Agents</h3>
+                    <button class="btn btn-sm btn-primary" id="refreshAgents">
+                        <i class="fas fa-sync-alt"></i>
+                        Refresh
+                    </button>
+      </div>
+                
+                <div class="agent-list" id="agentList">
+                    <!-- Agents will be populated here -->
+      </div>
+
+                <div class="sidebar-footer">
+                    <button class="btn btn-outline" id="addAgentBtn">
+                        <i class="fas fa-plus"></i>
+                        Add Agent
+                    </button>
+                    <button class="btn btn-primary" id="createDemoData" style="margin-top: 8px; width: 100%;">
+                        <i class="fas fa-magic"></i>
+                        Create Demo Data
+                    </button>
+                </div>
+            </aside>
+
+            <!-- Main Panel -->
+            <main class="main-panel">
+                <!-- Agent Details Header -->
+                <div class="agent-header" id="agentHeader" style="display: none;">
+                    <div class="agent-info">
+                        <div class="agent-avatar">
+                            <i class="fas fa-robot"></i>
+                        </div>
+                        <div class="agent-details">
+                            <h2 id="agentName">Agent Name</h2>
+                            <p class="agent-address" id="agentAddress">0x...</p>
+                        </div>
+                    </div>
+                    <div class="agent-stats">
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-coins"></i>
+          </div>
+                            <div class="stat-content">
+                                <span class="stat-label">Token Balance</span>
+                                <span class="stat-value" id="agentTokens">0</span>
+          </div>
+        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-chart-line"></i>
+          </div>
+                            <div class="stat-content">
+                                <span class="stat-label">Performance</span>
+                                <span class="stat-value" id="agentPerformance">0%</span>
+          </div>
+        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-list"></i>
+          </div>
+                            <div class="stat-content">
+                                <span class="stat-label">Total Actions</span>
+                                <span class="stat-value" id="agentActions">0</span>
+          </div>
+        </div>
+        </div>
+      </div>
+
+                <!-- Tabs -->
+                <div class="tabs" id="tabsContainer" style="display: none;">
+                    <button class="tab active" data-tab="actions">
+                        <i class="fas fa-history"></i>
+                        Actions
+                    </button>
+                    <button class="tab" data-tab="logs">
+                        <i class="fas fa-file-alt"></i>
+                        Logs
+                    </button>
+                    <button class="tab" data-tab="analytics">
+                        <i class="fas fa-chart-bar"></i>
+                        Analytics
+                    </button>
+                    <button class="tab" data-tab="settings">
+                        <i class="fas fa-cog"></i>
+                        Settings
+                    </button>
+      </div>
+
+                <!-- Tab Content -->
+                <div class="tab-content">
+                    <!-- Actions Tab -->
+                    <div class="tab-panel active" id="actionsTab">
+                        <div class="panel-header">
+                            <h3>Log New Action</h3>
+                            <button class="btn btn-primary" id="logActionBtn">
+                                <i class="fas fa-plus"></i>
+                                Log Action
+                            </button>
+  </div>
+
+                        <div class="action-form">
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="model">Model</label>
+                                    <input type="text" id="model" placeholder="gpt-4o-mini" />
+                                </div>
+                                <div class="form-group">
+                                    <label for="modelHash">Model Hash</label>
+                                    <input type="text" id="modelHash" placeholder="sha256 hash" />
+                                </div>
+                                <div class="form-group">
+                                    <label for="dataset">Dataset ID</label>
+                                    <input type="text" id="dataset" placeholder="my-dataset-v1" />
+      </div>
+                                <div class="form-group">
+                                    <label for="datasetHash">Dataset Hash</label>
+                                    <input type="text" id="datasetHash" placeholder="sha256 hash" />
+    </div>
+  </div>
+
+                            <div class="form-group">
+                                <label for="inputs">Inputs (JSON)</label>
+                                <textarea id="inputs" rows="4" placeholder='{"prompt": "..."}'></textarea>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="outputs">Outputs (JSON)</label>
+                                <textarea id="outputs" rows="4" placeholder='{"result": "..."}'></textarea>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="notes">Notes</label>
+                                <input type="text" id="notes" placeholder="Additional context..." />
+                            </div>
+                        </div>
+
+                        <div class="actions-timeline">
+                            <div class="timeline-header">
+                                <h3>Action Timeline</h3>
+                                <button class="btn btn-sm btn-outline" id="refreshActions">
+                                    <i class="fas fa-sync-alt"></i>
+                                    Refresh
+                                </button>
+                            </div>
+                            <div class="timeline-table">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Timestamp</th>
+                                            <th>Model</th>
+                                            <th>Hash</th>
+                                            <th>Status</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="actionsTableBody">
+                                        <!-- Actions will be populated here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Logs Tab -->
+                    <div class="tab-panel" id="logsTab">
+                        <div class="logs-container">
+                            <div class="logs-header">
+                                <h3>Agent Logs</h3>
+                                <div class="logs-controls">
+                                    <select id="logLevel">
+                                        <option value="all">All Levels</option>
+                                        <option value="info">Info</option>
+                                        <option value="warning">Warning</option>
+                                        <option value="error">Error</option>
+                                    </select>
+                                    <button class="btn btn-sm btn-outline" id="clearLogs">
+                                        <i class="fas fa-trash"></i>
+                                        Clear
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="logs-content" id="logsContent">
+                                <!-- Logs will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Analytics Tab -->
+                    <div class="tab-panel" id="analyticsTab">
+                        <div class="analytics-grid">
+                            <div class="chart-card">
+                                <h3>Performance Over Time</h3>
+                                <div class="chart-placeholder" id="performanceChart">
+                                    <i class="fas fa-chart-line"></i>
+                                    <p>Performance chart will be displayed here</p>
+                                </div>
+                            </div>
+                            <div class="chart-card">
+                                <h3>Token Balance History</h3>
+                                <div class="chart-placeholder" id="tokenChart">
+                                    <i class="fas fa-coins"></i>
+                                    <p>Token balance chart will be displayed here</p>
+                                </div>
+                            </div>
+                            <div class="chart-card">
+                                <h3>Action Success Rate</h3>
+                                <div class="metric-display">
+                                    <div class="metric-value" id="successRate">0%</div>
+                                    <div class="metric-label">Success Rate</div>
+                                </div>
+                            </div>
+                            <div class="chart-card">
+                                <h3>Recent Evaluations</h3>
+                                <div class="evaluations-list" id="evaluationsList">
+                                    <!-- Evaluations will be populated here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Settings Tab -->
+                    <div class="tab-panel" id="settingsTab">
+                        <div class="settings-container">
+                            <h3>Agent Settings</h3>
+                            <div class="settings-form">
+                                <div class="form-group">
+                                    <label for="agentName">Agent Name</label>
+                                    <input type="text" id="agentNameInput" placeholder="Enter agent name" />
+                                </div>
+                                <div class="form-group">
+                                    <label for="agentDescription">Description</label>
+                                    <textarea id="agentDescription" rows="3" placeholder="Describe this agent's purpose..."></textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label for="evaluationThreshold">Evaluation Threshold</label>
+                                    <input type="number" id="evaluationThreshold" placeholder="0.8" min="0" max="1" step="0.1" />
+                                </div>
+                                <div class="form-group">
+                                    <label for="autoEvaluation">Auto Evaluation</label>
+                                    <input type="checkbox" id="autoEvaluation" />
+                                    <span class="checkbox-label">Enable automatic evaluation</span>
+                                </div>
+                                <button class="btn btn-primary" id="saveSettings">
+                                    <i class="fas fa-save"></i>
+                                    Save Settings
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
         </div>
     </div>
-    
-    <!-- Modal for IPFS Record -->
-    <div id="ipfsModal" class="modal">
+
+    <!-- Modal for viewing action details -->
+    <div class="modal" id="actionModal">
         <div class="modal-content">
-            <span class="close" onclick="closeModal()">&times;</span>
-            <h2>📄 IPFS Record</h2>
-            <div id="ipfsContent"></div>
+            <div class="modal-header">
+                <h3>Action Details</h3>
+                <button class="modal-close" id="closeModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <pre id="actionDetails"></pre>
+            </div>
         </div>
     </div>
-    
-    <script>
-        const API_BASE = 'http://localhost:8000';
-        
-        // Log action form handler
-        document.getElementById('logActionForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const logBtn = document.getElementById('logBtn');
-            const statusDiv = document.getElementById('logStatus');
-            
-            logBtn.disabled = true;
-            logBtn.textContent = '⏳ Logging...';
-            
-            try {
-                const requestData = {
-                    agent_id: document.getElementById('agentId').value,
-                    input_data: JSON.parse(document.getElementById('inputData').value),
-                    output_data: JSON.parse(document.getElementById('outputData').value)
-                };
-                
-                const response = await fetch(`${API_BASE}/log-action`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(requestData)
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    statusDiv.innerHTML = `
-                        <div class="status success">
-                            ✅ Action logged successfully!<br>
-                            Hash: ${result.hash}<br>
-                            CID: ${result.cid}<br>
-                            ${result.tx_hash ? `TX: ${result.tx_hash}` : 'TX: Not recorded (contract not available)'}
-                        </div>
-                    `;
-                    
-                    // Clear form
-                    document.getElementById('inputData').value = '';
-                    document.getElementById('outputData').value = '';
-                    
-                    // Reload actions
-                    loadActions();
-                } else {
-                    statusDiv.innerHTML = `<div class="status error">❌ Failed to log action: ${result.message}</div>`;
-                }
-            } catch (error) {
-                statusDiv.innerHTML = `<div class="status error">❌ Error: ${error.message}</div>`;
-            }
-            
-            logBtn.disabled = false;
-            logBtn.textContent = '🚀 Log Action';
-        });
-        
-        // Load actions from blockchain
-        async function loadActions() {
-            const actionsList = document.getElementById('actionsList');
-            actionsList.innerHTML = '<div class="loading">Loading actions...</div>';
-            
-            try {
-                const response = await fetch(`${API_BASE}/actions`);
-                const data = await response.json();
-                
-                if (data.actions && data.actions.length > 0) {
-                    actionsList.innerHTML = data.actions.map(action => `
-                        <div class="action-item">
-                            <div class="action-header">
-                                <div class="action-hash">${action.hash.substring(0, 16)}...</div>
-                                <div class="action-timestamp">${new Date(action.timestamp * 1000).toLocaleString()}</div>
-                            </div>
-                            <div class="action-details">
-                                <div class="detail-item">
-                                    <div class="detail-label">Agent</div>
-                                    <div class="detail-value">${action.agent}</div>
-                                </div>
-                                <div class="detail-item">
-                                    <div class="detail-label">CID</div>
-                                    <div class="detail-value">${action.cid}</div>
-                                </div>
-                                <div class="detail-item">
-                                    <div class="detail-label">TX Hash</div>
-                                    <div class="detail-value">${action.tx_hash}</div>
-                                </div>
-                                <div class="detail-item">
-                                    <div class="detail-label">Block</div>
-                                    <div class="detail-value">${action.block_number}</div>
-                                </div>
-                            </div>
-                            <button class="view-btn" onclick="viewIPFSRecord('${action.cid}')">👁️ View Full Record</button>
-                        </div>
-                    `).join('');
-                } else {
-                    actionsList.innerHTML = '<div class="loading">No actions found. Log your first action above!</div>';
-                }
-            } catch (error) {
-                actionsList.innerHTML = `<div class="status error">❌ Error loading actions: ${error.message}</div>`;
-            }
-        }
-        
-        // View IPFS record
-        async function viewIPFSRecord(cid) {
-            const modal = document.getElementById('ipfsModal');
-            const content = document.getElementById('ipfsContent');
-            
-            content.innerHTML = '<div class="loading">Loading IPFS record...</div>';
-            modal.style.display = 'block';
-            
-            try {
-                const response = await fetch(`${API_BASE}/ipfs/${cid}`);
-                const data = await response.json();
-                
-                if (data.success) {
-                    content.innerHTML = `
-                        <div class="json-display">${JSON.stringify(data.record, null, 2)}</div>
-                    `;
-                } else {
-                    content.innerHTML = `<div class="status error">❌ Failed to load IPFS record</div>`;
-                }
-            } catch (error) {
-                content.innerHTML = `<div class="status error">❌ Error: ${error.message}</div>`;
-            }
-        }
-        
-        // Close modal
-        function closeModal() {
-            document.getElementById('ipfsModal').style.display = 'none';
-        }
-        
-        // Close modal when clicking outside
-        window.onclick = function(event) {
-            const modal = document.getElementById('ipfsModal');
-            if (event.target == modal) {
-                modal.style.display = 'none';
-            }
-        }
-        
-        // Load actions on page load
-        window.onload = function() {
-            loadActions();
-        };
-    </script>
+
+    <!-- Modal for adding new agent -->
+    <div class="modal" id="addAgentModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add New Agent</h3>
+                <button class="modal-close" id="closeAddAgentModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="newAgentName">Agent Name</label>
+                    <input type="text" id="newAgentName" placeholder="Enter agent name" />
+                </div>
+                <div class="form-group">
+                    <label for="newAgentType">Agent Type</label>
+                    <select id="newAgentType">
+                        <option value="general">General Purpose</option>
+                        <option value="financial">Financial Advisor</option>
+                        <option value="medical">Medical Assistant</option>
+                        <option value="legal">Legal Advisor</option>
+                        <option value="technical">Technical Support</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="newAgentDescription">Description</label>
+                    <textarea id="newAgentDescription" rows="3" placeholder="Describe this agent's purpose..."></textarea>
+                </div>
+                <button class="btn btn-primary" id="createAgent">
+                    <i class="fas fa-plus"></i>
+                    Create Agent
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
 </body>
 </html>
-

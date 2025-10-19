@@ -1,6 +1,8 @@
-fastapi
-uvicorn
-pydantic
-python-dotenv
-psycopg2-binary
-pynacl
+# requirements.txt
+ fastapi
+ uvicorn
+ pydantic
+ python-dotenv
+ psycopg2-binary
+ pynacl
++web3

@@ -1,232 +1,229 @@
-# Blockchain Logging System - AgentVerifier
+# Agent Accountability Platform
 
-A simple Hardhat-based smart contract system for logging agent actions on the blockchain.
+A comprehensive platform for managing, monitoring, and evaluating AI agents with blockchain-based accountability and token rewards.
 
-## 📋 Overview
+## 🚀 Features
 
-The AgentVerifier contract provides a decentralized logging system that stores action data (hash, content identifier, and timestamp) for each agent on the blockchain. This ensures immutability and transparency for all recorded actions.
+### ✨ Modern Frontend
+- **Beautiful UI/UX**: Modern dark theme with smooth animations and responsive design
+- **Real-time Updates**: Live agent monitoring with WebSocket support
+- **Interactive Dashboard**: Comprehensive analytics and performance metrics
+- **Mobile Responsive**: Works seamlessly on all device sizes
 
-## 🏗️ Project Structure
+### 🤖 Multi-Agent System
+- **Agent Types**: Support for different agent specializations:
+  - General Purpose
+  - Financial Advisor
+  - Medical Assistant
+  - Legal Advisor
+  - Technical Support
+- **Agent Management**: Create, configure, and monitor multiple agents
+- **Agent Discovery**: Easy agent selection and switching
 
-```
-DubHacks/
-├── contracts/
-│   └── AgentVerifier.sol       # Main smart contract
-├── scripts/
-│   └── deploy.js               # Deployment script
-├── artifacts/
-│   ├── contracts/
-│   │   └── AgentVerifier.sol/
-│   │       └── AgentVerifier.json  # Contract ABI
-│   └── deployments/
-│       └── AgentVerifier.json      # Deployment info (address, network, etc.)
-├── hardhat.config.js           # Hardhat configuration
-└── package.json                # Project dependencies
-```
+### 🪙 Token System
+- **Smart Contract Integration**: Blockchain-based token rewards and penalties
+- **Real-time Evaluation**: Instant feedback on agent actions
+- **Token Balance Tracking**: Live updates of agent token balances
+- **Performance Incentives**: Reward good behavior, penalize bad actions
 
-## 🚀 Setup Instructions
+### 📊 Analytics & Monitoring
+- **Performance Metrics**: Success rates, action counts, and trends
+- **Leaderboard**: Rank agents by performance and token balance
+- **Action Timeline**: Complete history of agent activities
+- **Real-time Logs**: Comprehensive logging with filtering
+
+### 🔒 Accountability Features
+- **Action Logging**: Record all agent inputs and outputs
+- **IPFS Storage**: Decentralized storage for action records
+- **Hash Verification**: Cryptographic verification of actions
+- **Audit Trail**: Complete traceability of agent decisions
+
+## 🏗️ Architecture
+
+### Backend (FastAPI)
+- **RESTful API**: Comprehensive endpoints for all operations
+- **Database Integration**: PostgreSQL for persistent storage
+- **Blockchain Integration**: Web3.py for smart contract interaction
+- **IPFS Integration**: Decentralized file storage
+
+### Frontend (Vanilla JS)
+- **Modern CSS**: Custom design system with CSS variables
+- **Component-based**: Modular JavaScript architecture
+- **Real-time Updates**: Live data synchronization
+- **Progressive Enhancement**: Works without JavaScript
+
+### Smart Contract (Solidity)
+- **Agent Registry**: Track registered agents
+- **Action Recording**: Store action hashes and metadata
+- **Token Management**: Points-based reward system
+- **Event Logging**: Comprehensive event emission
+
+## 🚀 Quick Start
 
 ### Prerequisites
-
-- Node.js (v14+ recommended)
-- npm or yarn
+- Python 3.8+
+- Node.js 16+
+- PostgreSQL
+- Ethereum node (local or remote)
 
 ### Installation
 
-1. Dependencies are already installed. If you need to reinstall:
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd agent-accountability-platform
+   ```
+
+2. **Install backend dependencies**
+   ```bash
+   cd backend
+   pip install -r requirements.txt
+   ```
+
+3. **Install frontend dependencies**
    ```bash
    npm install
    ```
 
-## 📝 Contract Details
+4. **Set up environment variables**
+   ```bash
+   cp backend/.env.example backend/.env
+   # Edit backend/.env with your configuration
+   ```
 
-### AgentVerifier.sol
+5. **Set up database**
+   ```bash
+   createdb agent_accountability
+   psql agent_accountability < backend/db.sql
+   ```
 
-**Solidity Version:** ^0.8.20
+6. **Deploy smart contract**
+   ```bash
+   npx hardhat compile
+   npx hardhat run scripts/deploy.js --network localhost
+   ```
 
-**Key Features:**
-- Stores action data for each agent (address)
-- Each action contains:
-  - `bytes32 hash` - Hash of the action data
-  - `string cid` - Content identifier (e.g., IPFS CID)
-  - `uint256 ts` - Timestamp of the action
+7. **Start the application**
+   ```bash
+   # Terminal 1: Start backend
+   cd backend
+   python main.py
 
-**Main Functions:**
+   # Terminal 2: Start frontend
+   cd frontend
+   python -m http.server 8080
+   ```
 
-1. **recordAction(bytes32 _hash, string memory _cid, uint256 _ts)**
-   - Records a new action for the calling agent
-   - Emits `ActionRecorded` event
-   - Parameters:
-     - `_hash`: Hash of the action data
-     - `_cid`: Content identifier (e.g., IPFS CID)
-     - `_ts`: Timestamp
+8. **Access the application**
+   Open http://localhost:8080 in your browser
 
-2. **getActionCount(address _agent) returns (uint256)**
-   - Returns the number of actions recorded for a specific agent
+## 📖 Usage Guide
 
-3. **getAction(address _agent, uint256 _index) returns (bytes32, string, uint256)**
-   - Retrieves a specific action by index for an agent
+### Creating Agents
+1. Click "Add Agent" in the sidebar
+2. Fill in agent details (name, type, description)
+3. Agent is automatically registered on the blockchain
 
-4. **getAllActions(address _agent) returns (ActionData[])**
-   - Retrieves all actions for a specific agent
+### Logging Actions
+1. Select an agent from the sidebar
+2. Fill in the action form with:
+   - Model information
+   - Dataset details
+   - Input/output JSON
+   - Additional notes
+3. Click "Log Action" to record the action
 
-**Events:**
-- `ActionRecorded(address indexed agent, bytes32 hash, string cid, uint256 ts, uint256 indexed actionIndex)`
+### Evaluating Actions
+1. View the action timeline
+2. Click "Good" or "Bad" for each action
+3. Tokens are automatically adjusted via smart contract
+4. View updated balances in real-time
 
-## 🔧 Usage
+### Monitoring Performance
+1. Switch to the "Analytics" tab
+2. View performance metrics and charts
+3. Check the leaderboard for rankings
+4. Monitor success rates and trends
 
-### Compile Contract
+## 🔧 API Endpoints
 
+### Agent Management
+- `GET /agents` - List all agents
+- `POST /agents` - Register new agent
+- `GET /agents/{address}/actions` - Get agent actions
+- `POST /agents/{address}/actions` - Log agent action
+- `POST /agents/{address}/evaluate` - Evaluate agent action
+
+### Analytics
+- `GET /agents/{address}/analytics` - Get agent analytics
+- `GET /leaderboard` - Get agent leaderboard
+- `GET /agent-types` - Get available agent types
+
+### System
+- `GET /health` - System health check
+- `GET /ipfs/{cid}` - Retrieve IPFS content
+- `POST /log-action` - Log action (legacy)
+
+## 🎨 Customization
+
+### Adding New Agent Types
+1. Update `backend/main.py` - `get_agent_types()` endpoint
+2. Add type configuration with capabilities and thresholds
+3. Update frontend to handle new types
+
+### Styling
+- Modify `frontend/styles.css` for visual changes
+- CSS variables in `:root` for easy theme customization
+- Responsive breakpoints for different screen sizes
+
+### Smart Contract
+- Extend `contracts/AgentVerifier.sol` for new features
+- Add new events and functions as needed
+- Update ABI and redeploy
+
+## 🔒 Security Considerations
+
+- **Input Validation**: All inputs are validated and sanitized
+- **Access Control**: Smart contract functions are protected
+- **Data Integrity**: Cryptographic hashing ensures data integrity
+- **Audit Trail**: Complete logging of all operations
+
+## 🚀 Deployment
+
+### Production Setup
+1. Use a production database (PostgreSQL)
+2. Deploy smart contract to mainnet/testnet
+3. Use production IPFS node
+4. Configure proper CORS settings
+5. Set up monitoring and logging
+
+### Docker Deployment
 ```bash
-npm run compile
+docker-compose up -d
 ```
-
-### Deploy Contract
-
-Deploy to local Hardhat network:
-```bash
-npm run deploy
-```
-
-Deploy to localhost (requires running node):
-```bash
-npm run deploy:localhost
-```
-
-### Run Local Hardhat Node
-
-```bash
-npm run node
-```
-
-### Run Tests
-
-```bash
-npm test
-```
-
-## 📦 Integration with Backend
-
-After deployment, you'll find the following files in the `artifacts` directory:
-
-1. **Contract ABI**: `artifacts/contracts/AgentVerifier.sol/AgentVerifier.json`
-   - Contains the full contract ABI, bytecode, and metadata
-   - Use this to interact with the contract from your backend
-
-2. **Deployment Info**: `artifacts/deployments/AgentVerifier.json`
-   - Contains:
-     - Contract address
-     - Network name
-     - Deployer address
-     - Deployment timestamp
-
-### Example Integration (JavaScript/Node.js)
-
-```javascript
-const { ethers } = require("ethers");
-const fs = require("fs");
-
-// Load contract ABI and deployment info
-const contractArtifact = JSON.parse(
-  fs.readFileSync("artifacts/contracts/AgentVerifier.sol/AgentVerifier.json")
-);
-const deploymentInfo = JSON.parse(
-  fs.readFileSync("artifacts/deployments/AgentVerifier.json")
-);
-
-// Connect to provider
-const provider = new ethers.JsonRpcProvider("http://127.0.0.1:8545");
-const signer = await provider.getSigner();
-
-// Create contract instance
-const contract = new ethers.Contract(
-  deploymentInfo.address,
-  contractArtifact.abi,
-  signer
-);
-
-// Record an action
-const hash = ethers.keccak256(ethers.toUtf8Bytes("action data"));
-const cid = "QmExampleCIDString";
-const timestamp = Math.floor(Date.now() / 1000);
-
-const tx = await contract.recordAction(hash, cid, timestamp);
-await tx.wait();
-
-console.log("Action recorded!");
-
-// Get action count
-const count = await contract.getActionCount(signer.address);
-console.log("Total actions:", count.toString());
-
-// Get specific action
-const action = await contract.getAction(signer.address, 0);
-console.log("Action:", action);
-```
-
-## 🌐 Network Configuration
-
-The project is configured for:
-
-- **Local Hardhat Network** (default)
-  - Chain ID: 31337
-  - Auto-mining enabled
-  
-- **Localhost Network** (for persistent node)
-  - URL: http://127.0.0.1:8545
-  - Chain ID: 31337
-
-## 📜 Latest Deployment
-
-**Contract Address:** `0x5FbDB2315678afecb367f032d93F642f64180aa3`  
-**Network:** hardhat (local)  
-**Deployed:** 2025-10-18T20:17:15.932Z  
-**Deployer:** 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
-
-## 🛠️ Development
-
-### Available Scripts
-
-- `npm run compile` - Compile contracts
-- `npm run deploy` - Deploy to default network (hardhat)
-- `npm run deploy:localhost` - Deploy to localhost network
-- `npm run node` - Start local Hardhat node
-- `npm run test` - Run tests
-
-### Adding Tests
-
-Create test files in the `test/` directory:
-
-```javascript
-const { expect } = require("chai");
-const { ethers } = require("hardhat");
-
-describe("AgentVerifier", function () {
-  it("Should record an action", async function () {
-    const AgentVerifier = await ethers.getContractFactory("AgentVerifier");
-    const contract = await AgentVerifier.deploy();
-    await contract.waitForDeployment();
-
-    const hash = ethers.keccak256(ethers.toUtf8Bytes("test"));
-    const cid = "QmTest";
-    const ts = Math.floor(Date.now() / 1000);
-
-    await contract.recordAction(hash, cid, ts);
-    const count = await contract.getActionCount(await ethers.provider.getSigner().getAddress());
-    expect(count).to.equal(1);
-  });
-});
-```
-
-## 📄 License
-
-ISC
 
 ## 🤝 Contributing
 
-This is a DubHacks project. Feel free to extend and improve!
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 🙏 Acknowledgments
+
+- Built with FastAPI, Web3.py, and modern web technologies
+- Smart contract based on OpenZeppelin standards
+- UI inspired by modern design systems
+
+## 📞 Support
+
+For questions and support, please open an issue on GitHub or contact the development team.
 
 ---
 
-Built with ❤️ using Hardhat
-
+**Note**: This is a demonstration platform. For production use, ensure proper security audits and testing.
