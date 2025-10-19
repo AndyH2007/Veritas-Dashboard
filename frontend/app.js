@@ -1,4 +1,6 @@
 // Agent Accountability Platform - Main Application
+
+
 class AgentAccountabilityApp {
     constructor() {
         this.API_BASE = "http://localhost:8000";
@@ -6,6 +8,10 @@ class AgentAccountabilityApp {
         this.agents = [];
         this.logs = [];
         this.evaluations = [];
+        
+        // ⭐ ADD THESE TWO LINES
+        this.riskDashboard = new RiskDashboard(this);
+        window.riskDashboard = this.riskDashboard;
         
         this.init();
     }
@@ -117,7 +123,7 @@ class AgentAccountabilityApp {
     renderAgents() {
         const agentList = document.getElementById('agentList');
         agentList.innerHTML = '';
-
+    
         if (this.agents.length === 0) {
             agentList.innerHTML = `
                 <div class="empty-state">
@@ -132,10 +138,15 @@ class AgentAccountabilityApp {
             `;
             return;
         }
-
+    
         this.agents.forEach(agent => {
             const agentElement = document.createElement('div');
             agentElement.className = `agent-item ${this.currentAgent === agent.agent ? 'active' : ''}`;
+            
+            // ⭐ NEW: Add reputation badge
+            const reputation = agent.reputation || 50;
+            const reputationBadge = this.riskDashboard.getReputationBadge(reputation);
+            
             agentElement.innerHTML = `
                 <div class="agent-status ${agent.points > 0 ? '' : 'inactive'}"></div>
                 <div class="agent-name">
@@ -143,6 +154,7 @@ class AgentAccountabilityApp {
                     ${agent.name || 'Unnamed Agent'}
                 </div>
                 <div class="agent-type">${agent.typeName || 'General Purpose'}</div>
+                ${reputationBadge}
                 <div class="agent-tokens">${agent.points || 0} tokens</div>
             `;
             
@@ -300,20 +312,55 @@ class AgentAccountabilityApp {
             this.showNotification('Please select an agent first', 'warning');
             return;
         }
-
+    
         const inputs = this.parseJSON(document.getElementById('inputs').value);
         const outputs = this.parseJSON(document.getElementById('outputs').value);
-
+    
         if (!inputs || !outputs) {
             this.showNotification('Please provide valid JSON for inputs and outputs', 'error');
             return;
         }
-
+    
+        // ⭐ NEW: Check if this is a bypass (coming from risk modal approval)
+        const skipRiskCheck = arguments[0] === true;
+    
+        // Show risk analysis modal ONLY if not bypassing
+        if (!skipRiskCheck) {
+            const currentAgentData = this.agents.find(a => a.agent === this.currentAgent);
+            const agentType = currentAgentData?.type || 'general';
+    
+            const actionData = {
+                inputs: inputs,
+                outputs: outputs,
+                model: document.getElementById('model').value,
+                agent_type: agentType
+            };
+    
+            // Show risk analysis
+            const riskAnalysis = await this.riskDashboard.showRiskAnalysisModal(
+                this.currentAgent,
+                actionData
+            );
+    
+            // If blocked, stop here
+            if (riskAnalysis && riskAnalysis.risk_analysis.should_block) {
+                this.showNotification('Action blocked by Risk Oracle due to critical risk', 'error');
+                return;
+            }
+    
+            // If modal was shown, it will call logAction(true) when user clicks proceed
+            // So we return here and wait for that callback
+            if (riskAnalysis) {
+                return; // ⭐ IMPORTANT: Return here, don't continue
+            }
+        }
+    
+        // ⭐ Continue with actual logging (only if bypassing or no modal shown)
         const logButton = document.getElementById('logActionBtn');
         const originalText = logButton.innerHTML;
         logButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Logging...';
         logButton.disabled = true;
-
+    
         try {
             const response = await fetch(`${this.API_BASE}/agents/${this.currentAgent}/actions`, {
                 method: 'POST',
@@ -330,38 +377,34 @@ class AgentAccountabilityApp {
                     notes: document.getElementById('notes').value
                 })
             });
-
-            if (response.ok) {
-                const data = await response.json();
-                this.showNotification('Action logged successfully!', 'success');
+    
+            // ⭐ Parse response body first
+            const data = await response.json().catch(() => null);
+            
+            if (response.ok && data) {
+                // ⭐ SUCCESS PATH - Only show notification here
+                if (data.flagged) {
+                    this.showNotification('Action logged with risk flag - review recommended', 'warning');
+                } else {
+                    this.showNotification('Action logged successfully!', 'success');
+                }
                 
                 this.clearActionForm();
-                
-                // Immediately reload actions to show the new one
                 await this.loadActions();
-                
                 this.addLog('info', `Action logged: ${data.cid}`);
             } else {
-                const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
-                this.showNotification(`Failed to log action: ${errorData.detail}`, 'error');
+                // ⭐ ERROR PATH - Handle backend errors
+                const errorMsg = data?.detail || 'Unknown error occurred';
+                this.showNotification(`Failed to log action: ${errorMsg}`, 'error');
             }
         } catch (error) {
-            console.error('Failed to log action:', error);
-            this.showNotification('Failed to log action. Please check backend connection.', 'error');
+            // ⭐ NETWORK ERROR PATH - Only network/connection issues reach here
+            console.error('Network error while logging action:', error);
+            this.showNotification('Network error. Please check your connection.', 'error');
         } finally {
             logButton.innerHTML = originalText;
             logButton.disabled = false;
         }
-    }
-
-    clearActionForm() {
-        document.getElementById('model').value = '';
-        document.getElementById('modelHash').value = '';
-        document.getElementById('dataset').value = '';
-        document.getElementById('datasetHash').value = '';
-        document.getElementById('inputs').value = '';
-        document.getElementById('outputs').value = '';
-        document.getElementById('notes').value = '';
     }
 
     async createAgent() {
@@ -802,6 +845,344 @@ class AgentAccountabilityApp {
         }
     }
 }
+
+class RiskDashboard {
+    constructor(app) {
+        this.app = app;
+        this.API_BASE = app.API_BASE;
+    }
+
+    /**
+     * Show risk analysis modal before logging action
+     */
+    async showRiskAnalysisModal(agentId, actionData) {
+        try {
+            // Call risk analysis endpoint
+            const response = await fetch(`${this.API_BASE}/risk/analyze`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    agent_id: agentId,
+                    agent_type: actionData.agent_type || 'general',
+                    inputs: actionData.inputs,
+                    outputs: actionData.outputs,
+                    model: actionData.model
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Risk analysis failed');
+            }
+
+            const data = await response.json();
+            const riskAnalysis = data.risk_analysis;
+
+            // Create modal HTML
+            const modal = document.createElement('div');
+            modal.className = 'modal risk-modal active';
+            modal.innerHTML = `
+                <div class="modal-content risk-modal-content">
+                    <div class="modal-header">
+                        <h3>⚡ Risk Analysis</h3>
+                        <button class="modal-close" onclick="this.closest('.modal').remove()">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="modal-body risk-modal-body">
+                        ${this.buildRiskGauge(riskAnalysis)}
+                        ${this.buildRiskFlags(riskAnalysis)}
+                        ${this.buildRiskExplanation(riskAnalysis)}
+                        ${this.buildActionButtons(riskAnalysis, data.recommendation)}
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+            return data;
+        } catch (error) {
+            console.error('Risk analysis error:', error);
+            this.app.showNotification('Risk analysis unavailable, proceeding without check', 'warning');
+            return null;
+        }
+    }
+
+    /**
+     * Build risk gauge visualization
+     */
+    buildRiskGauge(analysis) {
+        const score = analysis.risk_score;
+        const level = analysis.risk_level;
+        
+        // Color based on risk level
+        const colors = {
+            low: '#10b981',
+            medium: '#f59e0b',
+            high: '#ef4444',
+            critical: '#dc2626'
+        };
+        const color = colors[level] || colors.medium;
+
+        // Gauge rotation (0° = 0 score, 180° = 100 score)
+        const rotation = (score / 100) * 180;
+
+        return `
+            <div class="risk-gauge-container">
+                <div class="risk-gauge">
+                    <svg viewBox="0 0 200 120" class="gauge-svg">
+                        <!-- Background arc -->
+                        <path d="M 20 100 A 80 80 0 0 1 180 100" 
+                              fill="none" 
+                              stroke="#334155" 
+                              stroke-width="20" 
+                              stroke-linecap="round"/>
+                        
+                        <!-- Colored arc based on score -->
+                        <path d="M 20 100 A 80 80 0 0 1 180 100" 
+                              fill="none" 
+                              stroke="${color}" 
+                              stroke-width="20" 
+                              stroke-linecap="round"
+                              stroke-dasharray="${(score / 100) * 251}, 251"
+                              class="gauge-fill"/>
+                        
+                        <!-- Center circle -->
+                        <circle cx="100" cy="100" r="50" fill="#1e293b" stroke="${color}" stroke-width="3"/>
+                        
+                        <!-- Score text -->
+                        <text x="100" y="95" 
+                              text-anchor="middle" 
+                              font-size="32" 
+                              font-weight="bold" 
+                              fill="${color}">
+                            ${Math.round(score)}
+                        </text>
+                        <text x="100" y="115" 
+                              text-anchor="middle" 
+                              font-size="14" 
+                              fill="#94a3b8">
+                            RISK SCORE
+                        </text>
+                    </svg>
+                </div>
+                
+                <div class="risk-level-badge risk-level-${level}">
+                    ${this.getRiskLevelIcon(level)} ${level.toUpperCase()}
+                </div>
+                
+                <div class="risk-confidence">
+                    Confidence: ${Math.round(analysis.confidence * 100)}%
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Build risk flags list
+     */
+    buildRiskFlags(analysis) {
+        if (!analysis.flags || analysis.flags.length === 0) {
+            return `
+                <div class="risk-flags">
+                    <div class="no-flags">
+                        <i class="fas fa-check-circle"></i>
+                        <p>No risk factors detected</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        const flagsHtml = analysis.flags.map(flag => {
+            const icon = this.getFlagIcon(flag.severity);
+            const severityClass = `flag-${flag.severity}`;
+            
+            return `
+                <div class="risk-flag ${severityClass}">
+                    <div class="flag-icon">${icon}</div>
+                    <div class="flag-content">
+                        <div class="flag-title">${flag.type.replace(/_/g, ' ').toUpperCase()}</div>
+                        <div class="flag-message">${flag.message}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        return `
+            <div class="risk-flags">
+                <h4>Risk Factors Detected:</h4>
+                ${flagsHtml}
+            </div>
+        `;
+    }
+
+    /**
+     * Build explanation text
+     */
+    buildRiskExplanation(analysis) {
+        return `
+            <div class="risk-explanation">
+                <h4>Analysis:</h4>
+                <pre>${analysis.explanation}</pre>
+            </div>
+        `;
+    }
+
+    /**
+     * Build action buttons based on recommendation
+     */
+    buildActionButtons(analysis, recommendation) {
+        if (analysis.should_block) {
+            return `
+                <div class="risk-actions blocked">
+                    <div class="block-message">
+                        <i class="fas fa-ban"></i>
+                        <strong>Action Blocked</strong>
+                        <p>This action has been automatically blocked due to critical risk level.</p>
+                    </div>
+                    <button class="btn btn-outline" onclick="this.closest('.modal').remove()">
+                        Close
+                    </button>
+                </div>
+            `;
+        }
+
+        if (recommendation.requires_approval) {
+            return `
+                <div class="risk-actions flagged">
+                    <div class="warning-message">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Manual Approval Required</strong>
+                        <p>${recommendation.reason}</p>
+                    </div>
+                    <div class="button-group">
+                        <button class="btn btn-error" onclick="this.closest('.modal').remove()">
+                            Cancel Action
+                        </button>
+                        <button class="btn btn-warning" onclick="window.riskDashboard.proceedWithOverride()">
+                            <i class="fas fa-user-shield"></i>
+                            Override (Admin)
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        return `
+            <div class="risk-actions approved">
+                <div class="success-message">
+                    <i class="fas fa-check-circle"></i>
+                    <strong>Action Approved</strong>
+                    <p>Risk level is within acceptable range.</p>
+                </div>
+                <div class="button-group">
+                    <button class="btn btn-outline" onclick="this.closest('.modal').remove()">
+                        Cancel
+                    </button>
+                    <button class="btn btn-success" onclick="window.riskDashboard.proceedWithAction()">
+                        <i class="fas fa-arrow-right"></i>
+                        Proceed
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Get risk level icon
+     */
+    getRiskLevelIcon(level) {
+        const icons = {
+            low: '✓',
+            medium: '⚠',
+            high: '⚡',
+            critical: '🚫'
+        };
+        return icons[level] || '•';
+    }
+
+    /**
+     * Get flag severity icon
+     */
+    getFlagIcon(severity) {
+        const icons = {
+            low: '<i class="fas fa-info-circle"></i>',
+            medium: '<i class="fas fa-exclamation-triangle"></i>',
+            high: '<i class="fas fa-exclamation-circle"></i>'
+        };
+        return icons[severity] || icons.medium;
+    }
+
+    /**
+     * Proceed with action (after approval)
+     */
+    /**
+ * Proceed with action (after approval)
+ */
+async proceedWithAction() {
+    const modal = document.querySelector('.risk-modal');
+    if (modal) modal.remove();
+    
+    // ⭐ Call logAction with bypass flag
+    await this.app.logAction(true); // true = skip risk check
+}
+
+    /**
+     * Proceed with admin override
+     */
+    async proceedWithOverride() {
+        const confirmed = confirm(
+            'Are you sure you want to override the risk assessment?\n\n' +
+            'This action will be logged with an admin override flag.'
+        );
+        
+        if (confirmed) {
+            const modal = document.querySelector('.risk-modal');
+            if (modal) modal.remove();
+            
+            this.app.showNotification('Action proceeding with admin override', 'warning');
+            
+            // ⭐ Call logAction with bypass flag
+            await this.app.logAction(true); // true = skip risk check
+        }
+    }
+
+    /**
+     * Show agent reputation badge
+     */
+    getReputationBadge(reputation) {
+        let level, color, icon;
+        
+        if (reputation >= 80) {
+            level = 'Trusted';
+            color = '#10b981';
+            icon = '⭐';
+        } else if (reputation >= 60) {
+            level = 'Reliable';
+            color = '#3b82f6';
+            icon = '✓';
+        } else if (reputation >= 40) {
+            level = 'Neutral';
+            color = '#f59e0b';
+            icon = '•';
+        } else if (reputation >= 20) {
+            level = 'Concerning';
+            color = '#ef4444';
+            icon = '⚠';
+        } else {
+            level = 'High Risk';
+            color = '#dc2626';
+            icon = '🚫';
+        }
+
+        return `
+            <div class="reputation-badge" style="background: ${color}20; color: ${color}; border: 1px solid ${color}">
+                <span class="reputation-icon">${icon}</span>
+                <span class="reputation-text">${level}</span>
+                <span class="reputation-score">${Math.round(reputation)}</span>
+            </div>
+        `;
+    }
+}
+
 
 document.addEventListener('DOMContentLoaded', () => {
     window.app = new AgentAccountabilityApp();
