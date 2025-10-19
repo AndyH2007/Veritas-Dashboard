@@ -13,7 +13,6 @@ class AgentAccountabilityApp {
     init() {
         this.bindEvents();
         this.loadInitialData();
-        this.setupWebSocket();
     }
 
     bindEvents() {
@@ -46,8 +45,8 @@ class AgentAccountabilityApp {
         document.getElementById('createDemoData').addEventListener('click', () => this.createDemoData());
 
         // Auto-refresh
-        setInterval(() => this.loadAgents(), 30000); // Refresh every 30 seconds
-        setInterval(() => this.loadSystemHealth(), 10000); // Health check every 10 seconds
+        setInterval(() => this.loadAgents(), 30000);
+        setInterval(() => this.loadSystemHealth(), 10000);
     }
 
     async loadInitialData() {
@@ -66,14 +65,6 @@ class AgentAccountabilityApp {
             if (data.ok) {
                 healthElement.textContent = 'Healthy';
                 healthElement.className = 'stat-value health';
-                
-                // Update additional health info if available
-                if (data.chainConnected !== undefined) {
-                    console.log('Blockchain:', data.chainConnected ? 'Connected' : 'Disconnected');
-                }
-                if (data.dbConnected !== undefined) {
-                    console.log('Database:', data.dbConnected ? 'Connected' : 'Disconnected');
-                }
             } else {
                 healthElement.textContent = 'Unhealthy';
                 healthElement.className = 'stat-value error';
@@ -82,7 +73,6 @@ class AgentAccountabilityApp {
             console.error('Health check failed:', error);
             document.getElementById('systemHealth').textContent = 'Offline';
             document.getElementById('systemHealth').className = 'stat-value error';
-            this.showNotification('Backend connection failed. Please ensure the API server is running.', 'error');
         }
     }
 
@@ -93,46 +83,28 @@ class AgentAccountabilityApp {
             
             this.agents = data.agents || [];
             
-            // Load agent types for additional metadata
+            // Load agent types
             try {
                 const typesResponse = await fetch(`${this.API_BASE}/agent-types`);
                 const typesData = await typesResponse.json();
                 this.agentTypes = typesData.types;
                 
-                // Enhance agents with type information
                 this.agents.forEach(agent => {
                     const agentType = this.agentTypes.find(type => type.id === agent.type) || this.agentTypes[0];
                     agent.typeName = agentType.name;
                     agent.icon = agentType.icon;
-                    agent.description = agentType.description;
                 });
             } catch (typesError) {
                 console.warn('Failed to load agent types:', typesError);
-                // Use default agent types
-                this.agentTypes = [
-                    { id: 'general', name: 'General Purpose', icon: 'fas fa-robot' },
-                    { id: 'financial', name: 'Financial Advisor', icon: 'fas fa-chart-line' },
-                    { id: 'medical', name: 'Medical Assistant', icon: 'fas fa-user-md' },
-                    { id: 'legal', name: 'Legal Advisor', icon: 'fas fa-gavel' },
-                    { id: 'technical', name: 'Technical Support', icon: 'fas fa-code' }
-                ];
-                
-                this.agents.forEach(agent => {
-                    agent.typeName = 'General Purpose';
-                    agent.icon = 'fas fa-robot';
-                    agent.description = 'AI Agent';
-                });
             }
             
             this.renderAgents();
             this.updateStats();
             
-            // Auto-select first agent if none selected
             if (!this.currentAgent && this.agents.length > 0) {
                 this.selectAgent(this.agents[0].agent);
             }
             
-            // If no agents exist, show a helpful message
             if (this.agents.length === 0) {
                 this.showNotification('No agents found. Click "Add Agent" to create your first agent.', 'info');
             }
@@ -181,9 +153,8 @@ class AgentAccountabilityApp {
 
     async selectAgent(agentAddress) {
         this.currentAgent = agentAddress;
-        this.renderAgents(); // Update active state
+        this.renderAgents();
         
-        // Show agent details
         const agent = this.agents.find(a => a.agent === agentAddress);
         if (agent) {
             this.showAgentDetails(agent);
@@ -198,9 +169,7 @@ class AgentAccountabilityApp {
         document.getElementById('agentName').textContent = agent.name || 'Unnamed Agent';
         document.getElementById('agentAddress').textContent = agent.agent;
         document.getElementById('agentTokens').textContent = agent.points || 0;
-        document.getElementById('agentActions').textContent = agent.actions?.length || 0;
         
-        // Calculate performance (placeholder)
         const performance = agent.points > 0 ? Math.min(100, Math.max(0, (agent.points / 100) * 100)) : 0;
         document.getElementById('agentPerformance').textContent = `${Math.round(performance)}%`;
     }
@@ -212,8 +181,10 @@ class AgentAccountabilityApp {
             const response = await fetch(`${this.API_BASE}/agents/${this.currentAgent}/actions`);
             const data = await response.json();
             
+            // Update action count in header
+            document.getElementById('agentActions').textContent = data.actions?.length || 0;
+            
             this.renderActions(data.actions || []);
-            this.updateAgentStats(data);
         } catch (error) {
             console.error('Failed to load actions:', error);
             this.showNotification('Failed to load actions', 'error');
@@ -224,15 +195,28 @@ class AgentAccountabilityApp {
         const tbody = document.getElementById('actionsTableBody');
         tbody.innerHTML = '';
 
+        if (actions.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="5" class="text-center text-muted" style="padding: var(--spacing-xl);">
+                        No actions logged yet. Log your first action above!
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
         actions.forEach((action, index) => {
             const row = document.createElement('tr');
+            const hashShort = action.hash_short || (action.hash ? action.hash.substring(0, 16) + '...' : 'N/A');
+            
             row.innerHTML = `
                 <td>${this.formatTimestamp(action.timestamp)}</td>
                 <td>${action.model || 'Unknown'}</td>
-                <td class="mono">${action.hash_short || action.hash?.substring(0, 16) + '...'}</td>
+                <td class="mono">${hashShort}</td>
                 <td>
                     <span class="status-indicator success"></span>
-                    <span>Pending</span>
+                    <span>Recorded</span>
                 </td>
                 <td class="action-buttons">
                     <button class="btn btn-sm btn-success" onclick="app.evaluateAction(${index}, true)">
@@ -277,14 +261,11 @@ class AgentAccountabilityApp {
                     isGood ? 'success' : 'warning'
                 );
                 
-                // Update UI
                 document.getElementById('agentTokens').textContent = data.points;
                 
-                // Reload actions to update status
                 await this.loadActions();
                 await this.loadAgents();
                 
-                // Add to evaluations
                 this.evaluations.unshift({
                     timestamp: Date.now(),
                     result: isGood ? 'good' : 'bad',
@@ -328,7 +309,6 @@ class AgentAccountabilityApp {
             return;
         }
 
-        // Show loading state
         const logButton = document.getElementById('logActionBtn');
         const originalText = logButton.innerHTML;
         logButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Logging...';
@@ -355,13 +335,11 @@ class AgentAccountabilityApp {
                 const data = await response.json();
                 this.showNotification('Action logged successfully!', 'success');
                 
-                // Clear form
                 this.clearActionForm();
                 
-                // Reload actions
+                // Immediately reload actions to show the new one
                 await this.loadActions();
                 
-                // Add to logs
                 this.addLog('info', `Action logged: ${data.cid}`);
             } else {
                 const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
@@ -371,7 +349,6 @@ class AgentAccountabilityApp {
             console.error('Failed to log action:', error);
             this.showNotification('Failed to log action. Please check backend connection.', 'error');
         } finally {
-            // Restore button state
             logButton.innerHTML = originalText;
             logButton.disabled = false;
         }
@@ -394,24 +371,19 @@ class AgentAccountabilityApp {
 
         if (!name) {
             this.showNotification('Please enter an agent name', 'warning');
-    return;
-  }
+            return;
+        }
 
         try {
-            // Generate a mock address for demo purposes
-            const mockAddress = '0x' + Math.random().toString(16).substr(2, 40);
-            
             const response = await fetch(`${this.API_BASE}/agents`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    id: mockAddress,
                     name: name,
-                    owner_org: 'Demo Organization',
-                    pubkey: 'mock_pubkey_' + Date.now(),
-                    stake_address: mockAddress
+                    type: type,
+                    description: description
                 })
             });
 
@@ -422,7 +394,8 @@ class AgentAccountabilityApp {
                 await this.loadAgents();
                 this.addLog('info', `New agent created: ${name}`);
             } else {
-                this.showNotification('Failed to create agent', 'error');
+                const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+                this.showNotification(`Failed to create agent: ${errorData.detail}`, 'error');
             }
         } catch (error) {
             console.error('Failed to create agent:', error);
@@ -437,19 +410,16 @@ class AgentAccountabilityApp {
     }
 
     switchTab(tabName) {
-        // Update tab buttons
         document.querySelectorAll('.tab').forEach(tab => {
             tab.classList.remove('active');
         });
         document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
 
-        // Update tab panels
         document.querySelectorAll('.tab-panel').forEach(panel => {
             panel.classList.remove('active');
         });
         document.getElementById(`${tabName}Tab`).classList.add('active');
 
-        // Load tab-specific data
         switch (tabName) {
             case 'logs':
                 this.renderLogs();
@@ -467,6 +437,15 @@ class AgentAccountabilityApp {
         const logsContent = document.getElementById('logsContent');
         logsContent.innerHTML = '';
 
+        if (this.logs.length === 0) {
+            logsContent.innerHTML = `
+                <div class="text-center text-muted" style="padding: var(--spacing-xl);">
+                    No logs yet. Actions will be logged here.
+                </div>
+            `;
+            return;
+        }
+
         this.logs.forEach(log => {
             const logElement = document.createElement('div');
             logElement.className = `log-entry ${log.level}`;
@@ -483,21 +462,23 @@ class AgentAccountabilityApp {
         if (!this.currentAgent) return;
 
         try {
-            // Load analytics data
             const response = await fetch(`${this.API_BASE}/agents/${this.currentAgent}/analytics`);
             const data = await response.json();
             
-            // Update success rate
-            const successRate = Math.round(data.metrics.success_rate * 100);
+            // Calculate dynamic success rate based on evaluations
+            let successRate = 0;
+            if (this.evaluations.length > 0) {
+                const goodCount = this.evaluations.filter(e => e.result === 'good').length;
+                successRate = Math.round((goodCount / this.evaluations.length) * 100);
+            } else if (data.metrics && data.metrics.success_rate) {
+                successRate = Math.round(data.metrics.success_rate * 100);
+            }
+            
             document.getElementById('successRate').textContent = `${successRate}%`;
 
-            // Render performance chart (placeholder)
-            this.renderPerformanceChart(data.performance_data);
-            
-            // Render evaluations
+            this.renderPerformanceChart(data.performance_data || []);
             this.renderEvaluations();
             
-            // Load leaderboard
             await this.loadLeaderboard();
         } catch (error) {
             console.error('Failed to load analytics:', error);
@@ -510,7 +491,6 @@ class AgentAccountabilityApp {
             const response = await fetch(`${this.API_BASE}/leaderboard`);
             const data = await response.json();
             
-            // Add leaderboard to analytics tab
             const leaderboardContainer = document.querySelector('#analyticsTab .analytics-grid');
             if (!document.getElementById('leaderboardCard')) {
                 const leaderboardCard = document.createElement('div');
@@ -518,14 +498,12 @@ class AgentAccountabilityApp {
                 leaderboardCard.id = 'leaderboardCard';
                 leaderboardCard.innerHTML = `
                     <h3>Top Agents</h3>
-                    <div class="leaderboard-list" id="leaderboardList">
-                        <!-- Leaderboard will be populated here -->
-                    </div>
+                    <div class="leaderboard-list" id="leaderboardList"></div>
                 `;
                 leaderboardContainer.appendChild(leaderboardCard);
             }
             
-            this.renderLeaderboard(data.leaderboard);
+            this.renderLeaderboard(data.leaderboard || []);
         } catch (error) {
             console.error('Failed to load leaderboard:', error);
         }
@@ -537,13 +515,23 @@ class AgentAccountabilityApp {
         
         leaderboardList.innerHTML = '';
         
-        leaderboard.forEach((agent, index) => {
+        if (leaderboard.length === 0) {
+            leaderboardList.innerHTML = `
+                <div class="text-center text-muted" style="padding: var(--spacing-lg);">
+                    No agents to rank yet
+                </div>
+            `;
+            return;
+        }
+        
+        leaderboard.forEach((agent) => {
             const leaderboardItem = document.createElement('div');
             leaderboardItem.className = 'leaderboard-item';
+            const agentName = agent.name || agent.agent.substring(0, 8) + '...';
             leaderboardItem.innerHTML = `
                 <div class="leaderboard-rank">#${agent.rank}</div>
                 <div class="leaderboard-agent">
-                    <div class="agent-name">${agent.agent.substring(0, 8)}...</div>
+                    <div class="agent-name">${agentName}</div>
                     <div class="agent-stats">${agent.points} tokens • ${agent.action_count} actions</div>
                 </div>
                 <div class="leaderboard-points">${agent.points}</div>
@@ -556,24 +544,49 @@ class AgentAccountabilityApp {
         const chartContainer = document.getElementById('performanceChart');
         if (!chartContainer) return;
         
-        // Simple text-based chart for demo
+        if (!performanceData || performanceData.length === 0) {
+            chartContainer.innerHTML = `
+                <div class="text-center text-muted">
+                    <i class="fas fa-chart-line"></i>
+                    <p>No performance data available yet</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Limit chart data width
         chartContainer.innerHTML = `
-            <div class="chart-title">Performance Over Time</div>
-            <div class="chart-data">
-                ${performanceData.map(day => `
-                    <div class="chart-day">
-                        <div class="day-label">${new Date(day.date * 1000).toLocaleDateString()}</div>
-                        <div class="day-bar" style="width: ${Math.min(100, (day.points / 100) * 100)}%"></div>
-                        <div class="day-value">${day.points} pts</div>
-                    </div>
-                `).join('')}
+            <div class="chart-container">
+                <div class="chart-title">Performance Over Time</div>
+                <div class="chart-data">
+                    ${performanceData.slice(0, 7).map(day => `
+                        <div class="chart-day">
+                            <div class="day-label">${new Date(day.date * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
+                            <div class="day-bar-container">
+                                <div class="day-bar" style="width: ${Math.min(100, Math.max(5, (day.points / 100) * 100))}%"></div>
+                            </div>
+                            <div class="day-value">${day.points}</div>
+                        </div>
+                    `).join('')}
+                </div>
             </div>
         `;
     }
 
     renderEvaluations() {
         const evaluationsList = document.getElementById('evaluationsList');
+        if (!evaluationsList) return;
+        
         evaluationsList.innerHTML = '';
+
+        if (this.evaluations.length === 0) {
+            evaluationsList.innerHTML = `
+                <div class="text-center text-muted" style="padding: var(--spacing-lg);">
+                    No evaluations yet. Rate actions to see results here.
+                </div>
+            `;
+            return;
+        }
 
         this.evaluations.slice(0, 10).forEach(evaluation => {
             const evaluationElement = document.createElement('div');
@@ -592,22 +605,14 @@ class AgentAccountabilityApp {
     }
 
     loadSettings() {
-        // Load current agent settings (placeholder)
-        document.getElementById('agentNameInput').value = this.currentAgent ? 'Current Agent' : '';
-        document.getElementById('agentDescription').value = 'Agent description...';
+        const agent = this.agents.find(a => a.agent === this.currentAgent);
+        document.getElementById('agentNameInput').value = agent?.name || '';
+        document.getElementById('agentDescription').value = agent?.description || '';
         document.getElementById('evaluationThreshold').value = '0.8';
         document.getElementById('autoEvaluation').checked = false;
     }
 
     async saveSettings() {
-        const settings = {
-            name: document.getElementById('agentNameInput').value,
-            description: document.getElementById('agentDescription').value,
-            threshold: document.getElementById('evaluationThreshold').value,
-            autoEvaluation: document.getElementById('autoEvaluation').checked
-        };
-
-        // In a real app, this would save to the backend
         this.showNotification('Settings saved successfully!', 'success');
         this.addLog('info', 'Agent settings updated');
     }
@@ -619,12 +624,10 @@ class AgentAccountabilityApp {
             message: message
         });
 
-        // Keep only last 100 logs
         if (this.logs.length > 100) {
             this.logs = this.logs.slice(0, 100);
         }
 
-        // Re-render if logs tab is active
         if (document.querySelector('[data-tab="logs"]').classList.contains('active')) {
             this.renderLogs();
         }
@@ -650,11 +653,10 @@ class AgentAccountabilityApp {
 
     updateStats() {
         document.getElementById('totalAgents').textContent = this.agents.length;
-        document.getElementById('activeActions').textContent = this.agents.reduce((sum, agent) => sum + (agent.actions?.length || 0), 0);
-    }
-
-    updateAgentStats(data) {
-        document.getElementById('agentActions').textContent = data.actions?.length || 0;
+        const totalActions = this.agents.reduce((sum, agent) => {
+            return sum + (agent.action_count || 0);
+        }, 0);
+        document.getElementById('activeActions').textContent = totalActions;
     }
 
     showAddAgentModal() {
@@ -670,7 +672,6 @@ class AgentAccountabilityApp {
     }
 
     showNotification(message, type = 'info') {
-        // Create notification element
         const notification = document.createElement('div');
         notification.className = `notification notification-${type}`;
         notification.innerHTML = `
@@ -678,13 +679,10 @@ class AgentAccountabilityApp {
             <span>${message}</span>
         `;
 
-        // Add to page
         document.body.appendChild(notification);
 
-        // Animate in
         setTimeout(() => notification.classList.add('show'), 100);
 
-        // Remove after 3 seconds
         setTimeout(() => {
             notification.classList.remove('show');
             setTimeout(() => notification.remove(), 300);
@@ -710,7 +708,13 @@ class AgentAccountabilityApp {
     }
 
     formatTimestamp(timestamp) {
-        return new Date(timestamp * 1000).toLocaleString();
+        const date = new Date(timestamp * 1000);
+        return date.toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
     }
 
     async createDemoData() {
@@ -718,88 +722,74 @@ class AgentAccountabilityApp {
         
         const demoAgents = [
             {
-                id: "0x1234567890123456789012345678901234567890",
                 name: "Financial Advisor Bot",
-                owner_org: "Demo Corp",
-                pubkey: "demo_pubkey_1",
-                stake_address: "0x1234567890123456789012345678901234567890",
-                type: "financial"
+                type: "financial",
+                description: "AI agent for financial advice and market analysis"
             },
             {
-                id: "0x2345678901234567890123456789012345678901", 
                 name: "Medical Assistant",
-                owner_org: "HealthTech Inc",
-                pubkey: "demo_pubkey_2",
-                stake_address: "0x2345678901234567890123456789012345678901",
-                type: "medical"
+                type: "medical",
+                description: "Healthcare AI for symptom analysis and guidance"
             },
             {
-                id: "0x3456789012345678901234567890123456789012",
                 name: "Legal Advisor",
-                owner_org: "LawFirm LLC", 
-                pubkey: "demo_pubkey_3",
-                stake_address: "0x3456789012345678901234567890123456789012",
-                type: "legal"
+                type: "legal",
+                description: "Legal document analysis and advisory AI"
             }
         ];
 
         try {
-            // Create demo agents
+            const createdAgents = [];
+            
             for (const agent of demoAgents) {
                 try {
-                    await fetch(`${this.API_BASE}/agents`, {
+                    const response = await fetch(`${this.API_BASE}/agents`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(agent)
                     });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        createdAgents.push(data.agent.id);
+                    }
                 } catch (error) {
-                    console.warn(`Agent ${agent.name} might already exist:`, error);
+                    console.warn(`Failed to create ${agent.name}:`, error);
                 }
             }
 
-            // Create demo actions for each agent
+            // Reload agents to get the created ones
+            await this.loadAgents();
+
+            // Create demo actions for created agents
             const demoActions = [
                 {
-                    agent: "0x1234567890123456789012345678901234567890",
-                    model: "gpt-4o-mini",
-                    model_hash: "sha256:abc123...",
-                    dataset_id: "financial-data-v1",
-                    dataset_hash: "sha256:def456...",
-                    inputs: {"query": "What is the current market trend for tech stocks?", "user_id": "user123"},
-                    outputs: {"analysis": "Tech stocks are showing bullish trends...", "confidence": 0.85},
-                    notes: "Market analysis request"
+                    model: "gpt-4",
+                    inputs: {"query": "What is the current market trend?"},
+                    outputs: {"analysis": "Markets showing bullish trends", "confidence": 0.85}
                 },
                 {
-                    agent: "0x2345678901234567890123456789012345678901",
-                    model: "gpt-4o-mini", 
-                    model_hash: "sha256:ghi789...",
-                    dataset_id: "medical-data-v1",
-                    dataset_hash: "sha256:jkl012...",
-                    inputs: {"symptoms": ["headache", "fever"], "age": 35, "gender": "female"},
-                    outputs: {"diagnosis": "Possible viral infection", "recommendation": "Rest and hydration", "confidence": 0.78},
-                    notes: "Symptom analysis"
-                },
-                {
-                    agent: "0x3456789012345678901234567890123456789012",
-                    model: "gpt-4o-mini",
-                    model_hash: "sha256:mno345...",
-                    dataset_id: "legal-data-v1", 
-                    dataset_hash: "sha256:pqr678...",
-                    inputs: {"contract_text": "This agreement is between...", "question": "Are there any liability issues?"},
-                    outputs: {"analysis": "No major liability concerns found", "risk_level": "low", "confidence": 0.92},
-                    notes: "Contract review"
+                    model: "claude-3-sonnet",
+                    inputs: {"symptoms": ["headache", "fever"]},
+                    outputs: {"diagnosis": "Possible viral infection", "confidence": 0.78}
                 }
             ];
 
-            for (const action of demoActions) {
+            for (let i = 0; i < Math.min(createdAgents.length, demoActions.length); i++) {
                 try {
-                    await fetch(`${this.API_BASE}/agents/${action.agent}/actions`, {
+                    await fetch(`${this.API_BASE}/agents/${createdAgents[i]}/actions`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(action)
+                        body: JSON.stringify({
+                            ...demoActions[i],
+                            model_hash: `sha256:${Math.random().toString(36).substring(7)}`,
+                            dataset_id: "demo-dataset-v1",
+                            dataset_hash: `sha256:${Math.random().toString(36).substring(7)}`,
+                            notes: "Demo action"
+                        })
                     });
                 } catch (error) {
-                    console.warn(`Failed to create action for ${action.agent}:`, error);
+                    console.warn(`Failed to create action:`, error);
                 }
             }
 
@@ -813,12 +803,11 @@ class AgentAccountabilityApp {
     }
 }
 
-// Initialize the application when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     window.app = new AgentAccountabilityApp();
 });
 
-// Add notification styles
+// Notification styles
 const notificationStyles = `
 .notification {
     position: fixed;
@@ -862,7 +851,6 @@ const notificationStyles = `
 }
 `;
 
-// Add styles to head
 const styleSheet = document.createElement('style');
 styleSheet.textContent = notificationStyles;
 document.head.appendChild(styleSheet);
