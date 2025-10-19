@@ -5,10 +5,16 @@ from dotenv import load_dotenv
 import psycopg2, psycopg2.extras
 from nacl.signing import VerifyKey
 from nacl.encoding import HexEncoder
+from time import time
 
 from backend.storage import ensure_bucket, put_bytes
 from backend.merkle import leaf_hash
 from backend.policies import evaluate_policies
+from fastapi import HTTPException, Query
+from backend.chain_config import load_contract_info, ContractConfigError
+from backend.ipfs import put_json, get_json
+from backend.hashutil import canonical_bytes, compute_action_hash, bundle_for_hash
+from backend.eth import get_contract, get_w3
 
 load_dotenv()  # loads backend/.env
 
@@ -16,6 +22,36 @@ DB_URL = os.getenv("DATABASE_URL")
 BUCKET = os.getenv("S3_BUCKET", "audit-traces")
 
 app = FastAPI(title="Audit API")
+
+from typing import Dict, Any, Optional, List
+
+class PutBody(BaseModel):
+    record: Dict[str, Any]
+
+@app.post("/debug/ipfs-put")
+def debug_ipfs_put(body: PutBody):
+    """
+    POST a JSON like {"record": {"hello": "world"}}
+    Returns {"cid": "..."} and stores it under ipfs_store/<cid>.json
+    """
+    try:
+        cid = put_json(body.record)
+        return {"ok": True, "cid": cid}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"ipfs-put failed: {e}")
+
+@app.get("/ipfs/{cid}")
+def ipfs_get(cid: str):
+    """
+    GET the full JSON back by CID.
+    """
+    try:
+        return get_json(cid)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"cid not found: {cid}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"ipfs-get failed: {e}")
+
 
 def db():
     return psycopg2.connect(DB_URL)
@@ -27,6 +63,22 @@ def _startup():
 @app.get("/health")
 def health():
     return {"ok": True}
+
+@app.get("/debug/contract-info")
+def debug_contract_info():
+    try:
+        address, abi = load_contract_info()
+        # Keep response small: show a few function names only
+        fn_names = [it.get("name") for it in abi if it.get("type") == "function"]
+        return {
+            "ok": True,
+            "address": address,
+            "abi_functions_count": len(fn_names),
+            "sample_functions": fn_names[:5],
+        }
+    except ContractConfigError as e:
+        # Return a helpful message to the browser
+        raise HTTPException(status_code=500, detail=str(e))
 
 class RunAttestation(BaseModel):
     agent_id: str
@@ -42,6 +94,49 @@ class RunAttestation(BaseModel):
     claims: dict | None = None
     trace_hash: str | None = None
     signature: str
+
+@app.get("/actions")
+def list_actions(
+    from_block: int = Query(0, description="Start block to scan from (0 = genesis)"),
+    to_block: str = Query("latest", description='"latest" or a specific block number')
+) -> List[Dict[str, Any]]:
+    """
+    Reads ActionRecorded events from the contract and returns a simple list:
+    [
+      {"actor":"0x...", "hash":"0x...", "cid":"...", "ts": 1729..., "block": 123, "txHash": "0x..."},
+      ...
+    ]
+    """
+    try:
+        w3 = get_w3()
+        contract = get_contract()
+
+        # IMPORTANT: change "ActionRecorded" & arg names if your contract event differs.
+        event_abi = contract.events.ActionRecorded
+
+        # web3.py v6 pattern: use the event's get_logs
+        logs = event_abi().get_logs(from_block=from_block, to_block=to_block)
+
+        out = []
+        for log in logs:
+            # log.args contains the event parameters (names depend on your Solidity)
+            args = log["args"]
+            # Adjust these keys to match your event (hash/cid/ts/actor names):
+            out.append({
+                "actor": args.get("actor"),         # address
+                "hash": args.get("hash"),           # string (0x... if you stored hex string)
+                "cid": args.get("cid"),             # string
+                "ts": int(args.get("ts")),          # uint256 -> Python int
+                "block": log["blockNumber"],
+                "txHash": log["transactionHash"].hex(),
+            })
+
+        return out
+
+    except Exception as e:
+        # Surface a helpful error (e.g., node not running, wrong event name)
+        raise HTTPException(status_code=500, detail=f"/actions failed: {e}")
+
 
 @app.post("/agents")
 def register_agent(payload: dict):
@@ -104,6 +199,82 @@ def list_runs(agent_id: str):
     with db() as cx, cx.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
         cur.execute("SELECT * FROM runs WHERE agent_id=%s ORDER BY created_at DESC LIMIT 50", (agent_id,))
         return [dict(r) for r in cur.fetchall()]
+
+class LogBody(BaseModel):
+    inputs: Dict[str, Any]
+    outputs: Dict[str, Any]
+    meta: Optional[Dict[str, Any]] = None
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "inputs": {"prompt": "buy 1 BTC", "account": "A123"},
+                "outputs": {"decision": "approve", "reason": "ok"},
+                "meta": {"agent_id": "demo-agent", "type": "order", "amount_usd": 5000}
+            }
+        }
+
+
+class HashBody(BaseModel):
+    inputs: Dict[str, Any]
+    outputs: Dict[str, Any]
+    ts: float
+
+@app.post("/log-action")
+def log_action(payload: LogBody):
+    try:
+        ts = int(time())
+
+        # 1) Build the stable bundle (inputs, outputs, ts)
+        bundle = bundle_for_hash(payload.inputs, payload.outputs, ts)
+
+        # 2) Compute canonical SHA-256 over that bundle
+        action_hash = compute_action_hash(payload.inputs, payload.outputs, ts)
+
+        # 3) Evaluate policies using the same bundle + meta
+        status, findings = evaluate_policies(bundle, payload.meta)
+
+        # 4) Save full evidence off-chain (mock IPFS). We include status & findings for convenience
+        record = {
+            "hash": action_hash,
+            **bundle,
+            "meta": payload.meta,
+            "policy": {"status": status, "findings": findings},
+        }
+        cid = put_json(record)
+
+        # 5) (Optional next) Write (hash, cid, ts) to the smart contract
+        #    txHash = <call your recordAction(...) and get tx hash>
+
+        # 6) Return the receipt to the caller
+        return {
+            "ok": True,
+            "hash": action_hash,
+            "cid": cid,
+            "ts": ts,
+            "status": status,
+            "findings": findings,
+            # "txHash": txHash,  # add when you wire the contract call
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"log-action failed: {e}")
+
+@app.post("/debug/hash")
+def debug_hash(body: HashBody):
+    """
+    POST a minimal bundle and get back:
+    - the canonical JSON (string) we hash
+    - the SHA-256 hash (0x...)
+    This lets you verify stability and see *exactly* what is hashed.
+    """
+    try:
+        bundle = bundle_for_hash(body.inputs, body.outputs, body.ts)
+        canon = canonical_bytes(bundle).decode("utf-8")
+        digest = compute_action_hash(body.inputs, body.outputs, body.ts)
+        return {"ok": True, "canonical_json": canon, "hash": digest}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"hashing failed: {e}")
 
 if __name__ == "__main__":
     import uvicorn
